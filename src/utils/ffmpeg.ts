@@ -71,7 +71,13 @@ export const trimVideo = async (
   ]);
 
   const data = await ff.readFile(outputName);
-  const blob = new Blob([data as Uint8Array], { type: 'video/mp4' });
+  const bytes = data instanceof Uint8Array
+    ? data
+    : typeof data === 'string'
+      ? new TextEncoder().encode(data)
+      : new Uint8Array(data as ArrayBufferLike);
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const blob = new Blob([buffer], { type: 'video/mp4' });
 
   // Cleanup
   await ff.deleteFile(inputName);

@@ -1,9 +1,8 @@
-import VideoEditor from "@/components/VideoEditor";
+import VideoEditorShell from "@/components/VideoEditorShell";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-[#030014] text-zinc-50 relative overflow-hidden flex flex-col selection:bg-indigo-500/30">
-      {/* Background Gradients */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/20 blur-[120px]" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-violet-600/20 blur-[120px]" />
@@ -26,7 +25,7 @@ export default function Home() {
       </header>
 
       <main className="flex-1 w-full px-4 sm:px-8 pb-20 relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150 fill-mode-both">
-        <VideoEditor />
+        <VideoEditorShell />
       </main>
     </div>
   );

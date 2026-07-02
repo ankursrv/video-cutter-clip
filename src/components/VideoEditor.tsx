@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatTime, formatBytes } from "@/utils/format";
 import { trimVideo } from "@/utils/ffmpeg";
 import { Button } from "@/components/ui/button";
@@ -32,16 +32,27 @@ export default function VideoEditor() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [outputBlob, setOutputBlob] = useState<Blob | null>(null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const outputUrlRef = useRef<string | null>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const revokeOutputUrl = useCallback(() => {
+    if (outputUrlRef.current) {
+      URL.revokeObjectURL(outputUrlRef.current);
+      outputUrlRef.current = null;
+    }
+  }, []);
+
+  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (selected) {
+      revokeOutputUrl();
       setFile(selected);
       setVideoUrl(URL.createObjectURL(selected));
       setOutputBlob(null);
+      setOutputUrl(null);
       setProgress(0);
       setErrorMsg(null);
       setStartTime(0);
@@ -49,12 +60,14 @@ export default function VideoEditor() {
       setStartTimeStr("00:00");
       setEndTimeStr("00:00");
     }
-  };
+  }, []);
 
-  const handleRemove = () => {
+  const handleRemove = useCallback(() => {
+    revokeOutputUrl();
     setFile(null);
     setVideoUrl(null);
     setOutputBlob(null);
+    setOutputUrl(null);
     setProgress(0);
     setErrorMsg(null);
     setStartTime(0);
@@ -62,9 +75,9 @@ export default function VideoEditor() {
     setStartTimeStr("00:00");
     setEndTimeStr("00:00");
     setYoutubeUrl("");
-  };
+  }, []);
 
-  const handleYoutubeSubmit = async () => {
+  const handleYoutubeSubmit = useCallback(async () => {
     if (!youtubeUrl) return;
     setIsDownloadingYoutube(true);
     setYoutubeDownloadProgress(0);
@@ -90,7 +103,7 @@ export default function VideoEditor() {
       const reader = res.body?.getReader();
       if (!reader) throw new Error("Failed to read video stream");
       
-      const chunks: Uint8Array[] = [];
+      const chunks: BlobPart[] = [];
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -107,9 +120,11 @@ export default function VideoEditor() {
       const blob = new Blob(chunks, { type: "video/mp4" });
       const newFile = new File([blob], "youtube_video.mp4", { type: "video/mp4" });
       
+      revokeOutputUrl();
       setFile(newFile);
       setVideoUrl(URL.createObjectURL(newFile));
       setOutputBlob(null);
+      setOutputUrl(null);
       setProgress(0);
       setErrorMsg(null);
       setStartTime(0);
@@ -123,9 +138,9 @@ export default function VideoEditor() {
       setIsDownloadingYoutube(false);
       setYoutubeDownloadProgress(0);
     }
-  };
+  }, [youtubeUrl]);
 
-  const handleLoadedMetadata = () => {
+  const handleLoadedMetadata = useCallback(() => {
     if (videoRef.current) {
       const d = videoRef.current.duration;
       setDuration(d);
@@ -136,27 +151,30 @@ export default function VideoEditor() {
       setStartTime(0);
       setStartTimeStr(formatTime(0));
     }
-  };
+  }, [endTime]);
 
-  const handleTimeUpdate = () => {
+  const handleTimeUpdate = useCallback(() => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
     }
-  };
+  }, []);
 
-  const handleRangeChange = (values: number[]) => {
-    setStartTime(values[0]);
-    setEndTime(values[1]);
-    setStartTimeStr(formatTime(values[0]));
-    setEndTimeStr(formatTime(values[1]));
+  const handleRangeChange = useCallback((value: number | readonly number[]) => {
+    const values = Array.isArray(value) ? value : [value];
+    const start = values[0] ?? 0;
+    const end = values[1] ?? start;
 
-    // Seek video player to start time when dragging
-    if (videoRef.current && Math.abs(videoRef.current.currentTime - values[0]) > 0.5) {
-      videoRef.current.currentTime = values[0];
+    setStartTime(start);
+    setEndTime(end);
+    setStartTimeStr(formatTime(start));
+    setEndTimeStr(formatTime(end));
+
+    if (videoRef.current && Math.abs(videoRef.current.currentTime - start) > 0.5) {
+      videoRef.current.currentTime = start;
     }
-  };
+  }, []);
 
-  const parseTime = (timeStr: string) => {
+  const parseTime = useCallback((timeStr: string) => {
     const parts = timeStr.split(':').map(Number);
     let secs = 0;
     if (parts.some(isNaN)) return -1;
@@ -169,9 +187,9 @@ export default function VideoEditor() {
       secs = parts[0];
     }
     return secs;
-  };
+  }, []);
 
-  const handleStartTimeBlur = () => {
+  const handleStartTimeBlur = useCallback(() => {
     const secs = parseTime(startTimeStr);
     if (secs >= 0 && secs <= endTime) {
       setStartTime(secs);
@@ -180,9 +198,9 @@ export default function VideoEditor() {
     } else {
       setStartTimeStr(formatTime(startTime)); // Revert if invalid
     }
-  };
+  }, [endTime, parseTime, startTime, startTimeStr]);
 
-  const handleEndTimeBlur = () => {
+  const handleEndTimeBlur = useCallback(() => {
     const secs = parseTime(endTimeStr);
     if (secs >= startTime && secs <= duration) {
       setEndTime(secs);
@@ -190,27 +208,44 @@ export default function VideoEditor() {
     } else {
       setEndTimeStr(formatTime(endTime)); // Revert if invalid
     }
-  };
+  }, [duration, endTime, endTimeStr, parseTime, startTime]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = useCallback(async () => {
     if (!file) return;
+    revokeOutputUrl();
     setIsProcessing(true);
     setProgress(0);
     setOutputBlob(null);
+    setOutputUrl(null);
     setErrorMsg(null);
 
     try {
       const blob = await trimVideo(file, startTime, endTime, (p) => {
         setProgress(Math.round(p * 100));
       });
+      const nextUrl = URL.createObjectURL(blob);
+      outputUrlRef.current = nextUrl;
       setOutputBlob(blob);
+      setOutputUrl(nextUrl);
     } catch (error: any) {
       console.error(error);
       setErrorMsg(error?.message || "An error occurred during video processing.");
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [endTime, file, startTime]);
+
+  useEffect(() => {
+    return () => {
+      if (outputUrlRef.current) {
+        URL.revokeObjectURL(outputUrlRef.current);
+      }
+    };
+  }, []);
+
+  const downloadFileName = file
+    ? `clip_${file.name.replace(/\.[^/.]+$/, "").replace(/[^a-z0-9-_]+/gi, "_").replace(/^_+|_+$/g, "") || "video"}.${(file.name.split(".").pop() || "mp4").toLowerCase()}`
+    : "clip.mp4";
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8">
@@ -218,7 +253,7 @@ export default function VideoEditor() {
       {/* Uploader */}
       {!file && (
         <Card className="p-12 flex flex-col items-center justify-center border border-white/10 bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-violet-500/10 opacity-50 group-hover:opacity-100 transition-opacity duration-700" />
+          <div className="absolute inset-0 bg-linear-to-br from-indigo-500/10 via-transparent to-violet-500/10 opacity-50 group-hover:opacity-100 transition-opacity duration-700" />
           
           <div className="w-20 h-20 bg-indigo-500/10 rounded-full flex items-center justify-center mb-6 border border-indigo-500/20 shadow-[0_0_30px_-5px_rgba(99,102,241,0.3)] relative z-10 group-hover:scale-110 transition-transform duration-500">
             <CloudUpload className="w-10 h-10 text-indigo-400" strokeWidth={1.5} />
@@ -262,7 +297,7 @@ export default function VideoEditor() {
               <Button 
                 onClick={isDownloadingYoutube ? undefined : handleYoutubeSubmit} 
                 disabled={!youtubeUrl && !isDownloadingYoutube}
-                className={`bg-rose-600 hover:bg-rose-500 text-white shrink-0 min-w-[140px] h-12 rounded-xl font-medium shadow-[0_0_20px_-5px_rgba(225,29,72,0.4)] transition-all overflow-hidden relative ${isDownloadingYoutube ? 'cursor-not-allowed opacity-100 hover:bg-rose-600' : 'hover:shadow-[0_0_30px_-5px_rgba(225,29,72,0.6)]'}`}
+                className={`bg-rose-600 hover:bg-rose-500 text-white shrink-0 min-w-35 h-12 rounded-xl font-medium shadow-[0_0_20px_-5px_rgba(225,29,72,0.4)] transition-all overflow-hidden relative ${isDownloadingYoutube ? 'cursor-not-allowed opacity-100 hover:bg-rose-600' : 'hover:shadow-[0_0_30px_-5px_rgba(225,29,72,0.6)]'}`}
               >
                 {isDownloadingYoutube && totalBytes > 0 && (
                   <div 
@@ -385,7 +420,7 @@ export default function VideoEditor() {
                       </div>
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-medium text-zinc-100 truncate max-w-[200px] sm:max-w-xs">{file.name}</h4>
+                      <h4 className="font-medium text-zinc-100 truncate max-w-50 sm:max-w-xs">{file.name}</h4>
                       <p className="text-xs text-zinc-400 mt-1.5 flex items-center gap-2">
                         <span className="px-2 py-0.5 rounded bg-white/10">{formatBytes(file.size)}</span>
                         <span className="px-2 py-0.5 rounded bg-white/10">{file.name.split('.').pop()?.toUpperCase() || 'MP4'}</span>
@@ -467,28 +502,27 @@ export default function VideoEditor() {
 
                     <div className="w-full aspect-video bg-black/50 rounded-xl overflow-hidden border border-emerald-500/20 shadow-lg">
                       <video
-                        src={URL.createObjectURL(outputBlob)}
+                        src={outputUrl ?? undefined}
                         className="w-full h-full"
                         controls
                       />
                     </div>
 
-                    <Button
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl h-12 shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.6)]"
-                      asChild
+                    <a
+                      href={outputUrl ?? undefined}
+                      download={downloadFileName}
+                      className="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 font-medium text-white shadow-[0_0_20px_-5px_rgba(16,185,129,0.4)] transition-all hover:bg-emerald-500 hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.6)]"
                     >
-                      <a
-                        href={URL.createObjectURL(outputBlob)}
-                        download={`clip_${file.name}`}
-                        className="flex items-center justify-center font-medium"
-                      >
-                        <Download className="w-5 h-5 mr-2" /> Download Clip
-                      </a>
-                    </Button>
+                      <Download className="mr-2 h-5 w-5" /> Download Clip
+                    </a>
                     <Button
                       className="w-full h-12 rounded-xl border-white/10 hover:bg-white/10 hover:text-white text-zinc-300 transition-colors bg-transparent"
                       variant="outline"
-                      onClick={() => setOutputBlob(null)}
+                      onClick={() => {
+                        revokeOutputUrl();
+                        setOutputBlob(null);
+                        setOutputUrl(null);
+                      }}
                     >
                       Make Another Cut
                     </Button>
