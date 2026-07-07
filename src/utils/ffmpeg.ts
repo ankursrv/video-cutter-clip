@@ -18,9 +18,12 @@ export const loadFFmpeg = async (): Promise<FFmpeg> => {
   const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
   
   try {
+    const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+    const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+    
     await ffmpeg.load({
-      coreURL: `${baseURL}/ffmpeg-core.js`,
-      wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+      coreURL,
+      wasmURL,
     });
     isLoaded = true;
     return ffmpeg;

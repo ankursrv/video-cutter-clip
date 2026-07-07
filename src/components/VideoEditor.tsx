@@ -354,6 +354,7 @@ export default function VideoEditor() {
                   src={videoUrl}
                   className="w-full h-full"
                   controls
+                  preload="auto"
                   onLoadedMetadata={handleLoadedMetadata}
                   onTimeUpdate={handleTimeUpdate}
                 />
@@ -409,7 +410,7 @@ export default function VideoEditor() {
                 <Card className="p-4 flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border-white/10 bg-white/5 backdrop-blur-md shadow-lg gap-4 group hover:bg-white/10 transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-32 h-20 bg-black/50 rounded-xl relative flex items-center justify-center overflow-hidden shrink-0 border border-white/10 group-hover:border-indigo-500/50 transition-colors">
-                      <video src={videoUrl} className="w-full h-full object-cover opacity-60" />
+                      <video src={videoUrl} preload="auto" className="w-full h-full object-cover opacity-60" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-8 h-8 bg-black/60 rounded-full flex items-center justify-center">
                           <Play className="w-4 h-4 text-white ml-0.5" fill="currentColor" />
